@@ -46,21 +46,36 @@ Note: "R CMD install" may not work; use "R CMD INSTALL".
 
 ## Demo 1: run a simple demo
 
-This demo provides a mini example to run both modules of scMAGeCK: RRA and LR. 
+This demo provides a mini example to run PS score. 
 
-In RStudio, open the file *scmageck_rra_demo.R* or *scmageck_lr_demo.R*. Then press *Ctrl + Enter* to run all lines of the script or click *Run* tab to run line by line.
 
-In the terminal, type
+In the terminal, go to demo1 folder, initiate R, and use the following command in R 
 
-    Rscript scmageck_rra_demo.R  
+    >source('ps_demo.R') 
 
-or
+to run the demo. The key steps of PS calculation involves the following two functions. In the first step, use assign_cell_identity function:
 
-    Rscript scmageck_lr_demo.R
+    rds_object<-assign_cell_identity(bc_frame,rds_object)
 
-to run both demos.
+This function assigns each cell a perturbation label, based on the expressions of sgRNAs.
 
-The explanations of each input/outp files can be found in the Output files section below.
+The second step involves calculating PS scores using the following command:
 
-## Demo 2
+    eff_object <- scmageck_eff_estimate(rds_object, bc_frame, perturb_gene='TP53', 
+                                    non_target_ctrl = 'NonTargetingControlGuideForHuman')
+
+The return values of this function include the PS score matrix, and a new RDS object containing the PS scores of perturbations as a column in metadata:
+
+    eff_estimat=eff_object$eff_matrix
+    rds_subset=eff_object$rds
+
+You can visualize the PS score using the following command:
+
+    FeaturePlot(rds_subset,features='TP53_eff',reduction = 'tsne')
+
+
+You should be able to see figures like this:
+
+![PS score visualization](demo/demo1/TP53_eff.png)
+
 
