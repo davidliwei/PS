@@ -78,4 +78,9 @@ You should be able to see figures like this:
 
 ![PS score visualization](demo/demo1/TP53_eff.png)
 
+# References
+
+Please cite the following paper if you would like to reference our PS method.
+
+* Song et al. Decoding Heterogenous Single-cell Perturbation Responses. bioRxiv 2023, 10.30.564796. [DOI](https://doi.org/10.1101/2023.10.30.564796) [bioRxiv](https://www.biorxiv.org/content/10.1101/2023.10.30.564796v1)
 
