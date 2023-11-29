@@ -53,7 +53,7 @@ In the terminal, go to demo1 folder, initiate R, and use the following command i
 
     >source('ps_demo.R') 
 
-to run the demo. The key steps of PS calculation involves the following two functions. In the first step, use assign_cell_identity function:
+to run the demo. The key steps of PS calculation involves the following two functions. In the first step, use assign_cell_identity function to identify the perturbed gene for each cell:
 
     rds_object<-assign_cell_identity(bc_frame,rds_object)
 
@@ -77,6 +77,18 @@ You can visualize the PS score using the following command:
 You should be able to see figures like this:
 
 ![PS score visualization](demo/demo1/TP53_eff.png)
+
+*Note*: this mini dataset is provided for users to run the pipeline. 
+To reduce file size, only a few gene expressions are non-zero. For accurate results, run the pipeline with the full dataset. 
+
+# Documentation
+
+A detailed documentation of the methods can be found in scMAGeCK R package. 
+In particular, scmageck_eff_estimate is the core function to estimate PS scores. Simply type
+
+    >?scmageck_eff_estimate 
+
+to learn how to use this function.
 
 # References
 
