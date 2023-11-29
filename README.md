@@ -19,27 +19,19 @@ scMAGeCK depends on the following softwares or packages.
 * R 
 * [Seurat](https://satijalab.org/seurat/)
 
-To install these dependencies via bioconda, install miniconda (Python v3) first (see instructions [here](https://docs.conda.io/en/latest/miniconda.html)), then use the following command:
-
-    conda create -n scmageck -c bioconda mageck pysam r-seurat
-    
-This will create an environment named "scmageck" that includes all dependencies. Use the following command to activate this environment:
-
-    source activate scmageck
-
-Sometimes Seurat may not be installed successfully using bioconda. If this is the case, follow the instructions of [Seurat installation](https://satijalab.org/seurat/install.html).
+Follow the instructions of [Seurat installation](https://satijalab.org/seurat/install.html).
 
 
-## Method 1: Install via our GitHub repository
+## Method 1: Install via our GitHub repository (recommended)
 
 Our [Github](https://github.com/weililab/scMAGeCK) repo is created specifically for an easy installation of scMAGeCK R package. Use the following command in R to install:
 
     library(devtools)
     install_github('weililab/scMAGeCK')
     
-## Method 2: download and install directly from bitbucket
+## Method 2: download and install directly from github
 
-First, download scMAGeCK R source code from [Downloads](https://bitbucket.org/weililab/scmageck/downloads/scMAGeCK_0.99.15.tar.gz) tab.
+First, download scMAGeCK R source code from github [scmageck](https://github.com/weililab/scMAGeCK) repository.
 
 Second, in the command line (if you are using RStudio, open your RStudio and click on the "Terminal" tab which is next to the Console tab), type the following command:
 
