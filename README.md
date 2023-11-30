@@ -61,7 +61,7 @@ to run the demo. The key steps of PS calculation involves calculating PS scores 
 where you need to provide 4 required parameters:
 
 * rds_object: a seurate object
-* bc_frame: a barcode table
+* bc_frame: a barcode table (see Documentation below for format specification)
 * perturb_gene: the gene label to be perturbed
 * non_target_ctrl: the negative control label
 
@@ -90,6 +90,22 @@ In particular, scmageck_eff_estimate is the core function to estimate PS scores.
     >?scmageck_eff_estimate 
 
 to learn how to use this function.
+
+## barcode file
+
+This file is inherited from scMAGeCK to record the guides (or perturbations) for each single cell. This is tab-sepraated text file with an example shown below:
+
+    cell    barcode sgrna   gene    read_count      umi_count
+    AAATCAACGGGTGA-1        NF1_sg_118      AGTCAGTACTGAGCACAACA    NF1     1187    30
+    AAATCAACGGGTGA-1        CDKN2A_sg_70    TCTTGGTGACCCTCCGGATT    CDKN2A  1       1
+    AAATCAACGGGTGA-1        SETD2_sg_157    AGTTCTTCTCGGTGTCCAAA    SETD2   1       1
+    AAATCAACGGGTGA-1        ARID1B_sg_14    GGAAGCAACCAGTCTCGATC    ARID1B  1       1
+
+In cases you get the sgRNA read count matrix, you can use guidematrix_to_triplet function in scMAGeCK to convert them into this file type. An example code is shown below. 
+
+    bc_frame=guidematrix_to_triplet(sobj[['CRISPR']]@counts,sobj) # assuming guide expression matrix is stored in a Seurat object named sobj
+    bc_frame[,'sgrna']=bc_frame[,'barcode'] # here you can use barcode label as sgrna label
+    bc_frame[,'gene']=sub('-[0-9]+$','',bc_frame[,'barcode']) # some barcode label contains gene information, so some string operation is sufficient to get gene label
 
 # References
 
