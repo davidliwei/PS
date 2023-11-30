@@ -1,0 +1,175 @@
+---
+title: "PS demo2: process a real Perturb-seq data"
+output: html_notebook
+---
+
+# Introduction
+
+In this demo, we will process one BeeSTING-seq data from [Morris et al. Science 2023](https://www.science.org/doi/10.1126/science.adh7699). This is a very interesting base editing Perturb-seq dataset, but we will primarily use this dataset as an example to show how to run PS from the very beginning.
+
+# Preprocessing
+
+Load the R libraries
+
+
+```{r}
+
+library(Seurat)
+library(ggplot2)
+library(patchwork)
+library(scales)
+library(dplyr)
+
+```
+
+If you have not installed scMAGeCK yet, use the following command to install:
+
+
+```{r}
+if(FALSE){
+  library(devtools)
+  install_github('weililab/scMAGeCK') 
+}
+```
+
+Once the installation is complete, load scMAGeCK:
+```{r}
+library(scMAGeCK)
+```
+
+Let's first read the expression data
+
+
+```{r}
+
+exp_mat_GDO=ReadMtx(mtx='counts/GSM7108136_BeeSTINGseq_GDO-A_matrix.mtx.gz',
+                    cells='counts/GSM7108136_BeeSTINGseq_GDO-A_barcodes.tsv.gz',
+                    features='counts/GSM7108136_BeeSTINGseq_GDO-A_features.tsv.gz')
+
+sobj=CreateSeuratObject(counts=exp_mat_GDO[1:36601,])
+sobj[['CRISPR']]=CreateAssayObject(counts=exp_mat_GDO[36602:36939,])
+
+```
+
+
+The rest is the standard Seurat preprocessing steps. See [Seurat tutorial](https://satijalab.org/seurat/articles/get_started_v5_new) for more details.
+
+```{r}
+
+sobj[["percent.mt"]] <- PercentageFeatureSet(sobj, pattern = "^MT-")
+VlnPlot(sobj, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+
+plot1 <- FeatureScatter(sobj, feature1 = "nCount_RNA", feature2 = "percent.mt")
+plot2 <- FeatureScatter(sobj, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+plot1 + plot2
+
+# sobj <- subset(sobj, subset = nFeature_RNA > 200 & nFeature_RNA < 4500 & percent.mt < 10)
+
+sobj <- NormalizeData(object = sobj) %>% FindVariableFeatures() %>% ScaleData()
+
+sobj <- RunPCA(object = sobj)
+
+sobj <- RunUMAP(object = sobj, dims = 1:10)
+
+
+sobj <- FindNeighbors(sobj, dims = 1:10)
+sobj <- FindClusters(sobj, resolution = 0.5)
+DimPlot(sobj, reduction = "umap")
+
+```
+
+
+# Calculate PS scores 
+
+Now we start with PS calculation. 
+
+## Step 1: prepare barcode files
+
+First, we need to extract the barcode file which will be necessary for running PS:
+
+```{r}
+
+
+bc_frame=guidematrix_to_triplet(sobj[['CRISPR']]@counts,sobj)
+bc_frame[,'sgrna']=bc_frame[,'barcode']
+bc_frame[,'gene']=sub('-[0-9]+$','',bc_frame[,'barcode'])
+
+# filter barcode file to only keep guides with >1 read counts
+
+bc_frame <- bc_frame[bc_frame$read_count>1,]
+
+```
+
+## Step 2: pre-process guide expression matrix
+
+
+
+```{r}
+
+DefaultAssay(sobj)='CRISPR'
+
+sobj <- pre_processRDS(bc_frame, sobj)
+
+FeaturePlot(sobj,features=c('NTC-GV2','CD55-Q86X'))
+```
+
+## Step 3: run PS method
+
+Use *scmageck_eff_estimate* function to calculate PS score. For more information, use *?scmageck_eff_estimate* 
+
+```{r}
+DefaultAssay(sobj)<-'RNA'
+
+# test CD55
+
+eff_object <- scmageck_eff_estimate(sobj, bc_frame, perturb_gene=c('SNP-36'), 
+                                    non_target_ctrl = 'NTC-GV2',subset_rds = T, lambda = 0, target_gene_max = 100)
+
+eff_estimat=eff_object$eff_matrix
+rds_subset=eff_object$rds  
+
+```
+
+
+Now you can visualize the PS scores
+
+```{r}
+FeaturePlot(rds_subset,features='SNP.36_eff')
+FeaturePlot(rds_subset,features = 'APPBP2')
+
+```
+
+We can further perform additional analysis, for example, to see whether CD55 mutations affect CD55 expression:
+
+```{r}
+
+data_f=FetchData(rds_subset,vars = c('sgrna','gene','APPBP2','SNP.36_eff'))
+
+library(ggplot2)
+
+data_f$PS=ifelse(data_f$gene=='NTC-GV2','NTC',ifelse(data_f$SNP.36_eff > 0.5, 'PS_High','PS_Low'))
+#data_f$PS=ifelse(data_f$CD55.Q86X_eff > 0.5, 'PS_High','PS_Low')
+
+p<-ggplot(data_f,aes(x=PS,y=APPBP2)) + 
+  geom_violin() + 
+  theme_bw()
+
+print(p)
+
+
+```
+
+An ECDF plot can be shown for different groups:
+
+```{r}
+
+
+plot(ecdf(data_f$APPBP2[data_f$gene=='NTC-GV2']),ylim=c(0.9,1),xlab='APPBP2 expression',ylab='Fraction')
+plot(ecdf(data_f$APPBP2[data_f$SNP.36_eff<0.2]),add=T,col='blue')
+plot(ecdf(data_f$APPBP2[data_f$SNP.36_eff>0.2]),add=T,col='red')
+
+legend('bottomright',c('NT','PS low','PS high'),col=c('black','blue','red'),lwd=1,pch=20)
+
+```
+
+

@@ -4,6 +4,8 @@ Perturbation-response Score (PS) analysis is a method to quantify diverse pertur
 ## Contents
 * Installation
 * Demo
+  - Demo 1: a simple example
+  - Demo 2: run from count matrix
 * Documentation
 * References
 
@@ -15,7 +17,6 @@ PS has been implemented in R as part of our [scMAGeCK](https://bitbucket.org/wei
 
 scMAGeCK depends on the following softwares or packages.
 
-* pysam
 * R 
 * [Seurat](https://satijalab.org/seurat/)
 
@@ -81,6 +82,16 @@ You should be able to see figures like this:
 
 *Note*: this mini dataset is provided for users to run the pipeline. 
 To reduce file size, only a few gene expressions are non-zero. For accurate results, run the pipeline with the full dataset. 
+
+
+## Demo2: run from read count table
+
+This demo is a small BeeSTING-seq dataset from [Morris et al Science 2023](https://www.science.org/doi/10.1126/science.adh7699). We will demonstrate how to run scMAGeCK/PS pipeline from count matrix files.
+
+An R markdown file and the complied html file is provided.
+To run this demo, open the R markdown file on RStudio, and run all the R scripts to reproduce results.
+
+
 
 # Documentation
 
