@@ -53,16 +53,17 @@ In the terminal, go to demo1 folder, initiate R, and use the following command i
 
     >source('ps_demo.R') 
 
-to run the demo. The key steps of PS calculation involves the following two functions. In the first step, use assign_cell_identity function to identify the perturbed gene for each cell:
-
-    rds_object<-assign_cell_identity(bc_frame,rds_object)
-
-This function assigns each cell a perturbation label, based on the expressions of sgRNAs.
-
-The second step involves calculating PS scores using the following command:
+to run the demo. The key steps of PS calculation involves calculating PS scores using the following command:
 
     eff_object <- scmageck_eff_estimate(rds_object, bc_frame, perturb_gene='TP53', 
                                     non_target_ctrl = 'NonTargetingControlGuideForHuman')
+
+where you need to provide 4 required parameters:
+
+* rds_object: a seurate object
+* bc_frame: a barcode table
+* perturb_gene: the gene label to be perturbed
+* non_target_ctrl: the negative control label
 
 The return values of this function include the PS score matrix, and a new RDS object containing the PS scores of perturbations as a column in metadata:
 
