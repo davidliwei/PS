@@ -1,6 +1,13 @@
 # Perturbation-response Score (PS) analysis
 Perturbation-response Score (PS) analysis is a method to quantify diverse perturbation responses and discover novel biological insights in single-cell perturbation datasets.
 
+The definition of perturbation is broad and can be any type of perturbation including genetic, chemical, environmental or mechanical perturbations. 
+In particular, PS can be used to analyze heterogeneity of perturbation responses from the following data types:
+
+- single-cell CRISPR screen (e.g., Perturb-seq, CROP-seq, ECCITE-seq);
+- single-cell RNA-seq of one perturbation (e.g., gene knockout, drug treatment);
+- a multiplex single-cell RNA-seq data containing a few of such perturbations.
+
 ## Contents
 * Installation
 * Demo
