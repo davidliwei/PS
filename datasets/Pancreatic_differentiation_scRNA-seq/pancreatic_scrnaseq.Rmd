@@ -1,0 +1,537 @@
+---
+title: "Pancreatic Differentiation scRNA-seq"
+author: 
+- name: "Bicna Song"
+- affiliation: "Children's National Hospital"
+- name: "Wei Li"
+- affiliation: "Children's National Hospital"
+date: "2023-12-07"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Setup the Seurat Object
+
+```{r}
+library(Seurat)
+library(scMAGeCK)
+library(hdf5r)
+library(ggplot2)
+```
+
+```{r}
+rds <- readRDS("10clones_seurat.rds")
+```
+
+```{r}
+DimPlot(rds,reduction = "umap")
+```
+
+```{r}
+bc_frame <- rds@meta.data[,c("sgrna","gene","nCount_sgRNA")]
+
+bc_frame[,"cell"] <- rownames(bc_frame)
+bc_frame[,"barcode"] <- bc_frame[,"sgrna"]
+
+colnames(bc_frame) <- c("sgrna","gene","read_count","cell","barcode")
+
+bc_frame <- bc_frame[,c("cell","barcode","sgrna","gene","read_count")]
+
+bc_frame[,"umi_count"] <- bc_frame[,"read_count"]
+bc_frame <- bc_frame[!is.na(bc_frame$gene),]
+
+bc_frame$gene <- sub("_","-",bc_frame$gene)
+head(bc_frame)
+```
+
+```{r}
+write.table(bc_frame, file = "10clones_seurat_scmageck_processed.frame.txt", row.names = F, quote = F, sep = "\t")
+```
+
+```{r}
+rds <- pre_processRDS(bc_frame,rds)
+```
+
+```{r}
+table(rds$gene)
+```
+
+```{r}
+targetgenelist <- c("43-HHEX", "44-HHEX", "45-HHEX", "51-FOXA1", "53-FOXA1/2", "57-OTUD5", "58-OTUD5", "61-CCDC6", "62-CCDC6")
+
+targetgenelist_geneid <- c("HHEX","HHEX","HHEX","FOXA1","FOXA2","OTUD5","OTUD5","CCDC6","CCDC6")
+
+negative_ctrl_gene <- "47-WT" 
+```
+
+```{r}
+eff_obj <- scmageck_eff_estimate(rds,bc_frame, targetgenelist, negative_ctrl_gene,
+                                 scale_factor = 6, assay_for_cor = "RNA",
+                                 perturb_gene_exp_id_list = targetgenelist_geneid)
+```
+
+```{r}
+eff_estimat <- eff_obj$eff_matrix
+rds_subset <- eff_obj$rds
+```
+
+```{r}
+for(pb_i in 1:length(targetgenelist)){
+  pb <- targetgenelist[pb_i]
+  
+  p <- FeaturePlot(rds_subset, features = paste(pb, "eff", sep = "_"))
+  print(p)
+  
+  pb_gene <- targetgenelist_geneid[pb_i]
+  p <- FeaturePlot(rds_subset,features = pb_gene)
+  print(p)
+}
+```
+
+```{r}
+if(F){
+  saveRDS(rds_subset, file = "10clones_seurat_scmageck_processed.rds")
+}else{
+  rds_subset = readRDS("10clones_seurat_scmageck_processed.rds")
+}
+```
+
+```{r}
+if(F){
+  saveRDS(eff_obj, file = "10clones_seurat_scmageck_processed_eff_object.rds")
+}else{
+  eff_obj = readRDS("10clones_seurat_scmageck_processed_eff_object.rds")
+}
+```
+
+# Generating CCDC6 PS (Figure 5f, Figure S10a,b)
+
+```{r}
+if(F){
+  mk1 <- FindMarkers(rds_subset, group.by = "gene", ident.1 = "61-CCDC6", ident.2 = "47-WT", logfc.threshold = 0.1)
+  res_1 <- eff_obj$target_gene_search_result$`61-CCDC6`$deframe
+  
+  rds_c47 <- subset(rds_subset, seurat_clusters %in% c("4","7","10")) # LV/DUO
+  mk1_47 <- FindMarkers(rds_c47, group.by = "gene", ident.1 = "61-CCDC6", ident.2 = "47-WT", logfc.threshold = 0.1)
+  
+  rds_c01513 <- subset(rds_subset, seurat_clusters %in% c("0","1","5","13")) # DE
+  mk1_01513 <- FindMarkers(rds_c01513, group.by = "gene", ident.1 = "61-CCDC6", ident.2 = "47-WT", logfc.threshold = 0.1)
+  
+  rds_c6_PP <- subset(rds_subset,seurat_clusters %in% c("6")) # PP
+  mk1_6_PP <- FindMarkers(rds_c6_PP, group.by = "gene", ident.1 = "61-CCDC6", ident.2 = "47-WT", logfc.threshold = 0.1)
+  
+  rds_c63812_PP <- subset(rds_subset, seurat_clusters %in% c("6","3","8","12")) # PP/PP in transition
+  mk1_63812_PP <- FindMarkers(rds_c63812_PP, group.by = "gene", ident.1 = "61-CCDC6", ident.2 = "47-WT", logfc.threshold = 0.1)
+  
+  rds_c2_DE <- subset(rds_subset, seurat_clusters %in% c("2")) # DE in transition
+  mk1_2_DE <- FindMarkers(rds_c2_DE, group.by = "gene", ident.1 = "61-CCDC6", ident.2 = "47-WT", logfc.threshold = 0.1)
+  
+  m1k_merge <- merge(mk1_47, mk1_01513, by = 0, suffixes = c("_c47","c_01513"), all = T)
+  m1k_merge <- merge(m1k_merge, mk1, by.x = 1, by.y = 0, all = T)
+  row.names(m1k_merge) = m1k_merge[,1]
+  
+  write.csv(m1k_merge, file = "table/61_ccdc6_wt_c47_c01513.csv", quote=F)
+  write.csv(mk1_47, file = "table/61_ccdc6_wt_c47.csv")
+  write.csv(mk1_01513, file = "table/61_ccdc6_wt_c01513.csv")
+  write.csv(mk1_6_PP, file = "table/61_ccdc6_wt_c6_PP.csv")
+  write.csv(mk1_63812_PP, file = "table/61_ccdc6_wt_c63812_PP.csv")
+  write.csv(mk1_2_DE, file = "table/61_ccdc6_wt_c2_DE.csv")
+  
+}else{
+  mk1_47 <- read.csv("table/61_ccdc6_wt_c47.csv", row.names = 1)
+  mk1_01513 <- read.csv("table/61_ccdc6_wt_c01513.csv", row.names = 1)
+  mk1_6_PP <- read.csv("table/61_ccdc6_wt_c6_PP.csv", row.names = 1)
+  mk1_63812_PP <- read.csv("table/61_ccdc6_wt_c63812_PP.csv", row.names = 1)
+  m1k_merge <- read.csv("table/61_ccdc6_wt_c47_c01513.csv", row.names = 1)
+  mk1_2_DE <- read.csv("table/61_ccdc6_wt_c2_DE.csv", row.names = 1)
+}
+```
+
+```{r}
+rds_subset2 <- rds_subset
+
+for(sx in grep("_eff", colnames(rds_subset2@meta.data), value = T)){
+  rds_subset2@meta.data[,sx] = NULL
+}
+```
+
+```{r}
+targetgenelist <- c("61-CCDC6" )
+targetgenelist_geneid <- c("CCDC6")
+negative_ctrl_gene <- "47-WT" 
+
+eff_obj2 <- scmageck_eff_estimate(rds_subset2, bc_frame, targetgenelist, negative_ctrl_gene,
+                      scale_factor = 6,
+                      assay_for_cor = "RNA",
+                      perturb_gene_exp_id_list = targetgenelist_geneid,
+                      background_correction = T)
+```
+
+```{r}
+eff_estimat2 <- eff_obj2$eff_matrix
+rds_subset2_rerun <- eff_obj2$rds
+```
+
+```{r}
+for(pb_i in 1:length(targetgenelist)){
+  pb <- targetgenelist[pb_i]
+  
+  p <- FeaturePlot(rds_subset2_rerun, features = paste(pb, "eff", sep="_"))
+  print(p)
+  
+  pb_gene <- targetgenelist_geneid[pb_i]
+  p <- FeaturePlot(rds_subset2_rerun, features = pb_gene)
+  print(p)
+}
+```
+
+## PP/PP in transition (clusters 6,3,8,12)
+
+```{r}
+target_gene_63812 <- rownames(mk1_63812_PP)[abs(mk1_63812_PP$avg_log2FC) > 0.25 & mk1_63812_PP$p_val_adj < 0.05]
+
+eff_obj5 <- scmageck_eff_estimate(rds_subset2, bc_frame, targetgenelist, negative_ctrl_gene,
+                                  perturb_target_gene = target_gene_63812,
+                                  scale_factor = 6,
+                                  assay_for_cor = "RNA",
+                                  perturb_gene_exp_id_list = targetgenelist_geneid,
+                                  background_correction = T)
+```
+
+## Figure 5f - PP/PP in transtion
+
+```{r}
+p <- FeaturePlot(eff_obj5$rds, features = grep("eff", colnames(eff_obj5$rds@meta.data), value = T)) + ggtitle("Pattern 1: PP/PP in transition")
+print(p)
+```
+
+## DE (clusters 0,1,5,13)
+
+```{r}
+target_gene_01513 <- rownames(mk1_01513)[abs(mk1_01513$avg_log2FC) > 0.25 & mk1_01513$p_val_adj < 0.05]
+
+eff_obj3 <- scmageck_eff_estimate(rds_subset2, bc_frame, targetgenelist, negative_ctrl_gene,
+                                  perturb_target_gene = target_gene_01513,
+                                  scale_factor=6,
+                                  assay_for_cor = "RNA", 
+                                  perturb_gene_exp_id_list = targetgenelist_geneid,
+                                  background_correction = T)
+```
+
+## Figure 5f - DE
+
+```{r}
+p <- FeaturePlot(eff_obj3$rds, features = grep("eff", colnames(eff_obj3$rds@meta.data), value = T)) + ggtitle("Pattern 2: DE")
+print(p)
+```
+
+## LV/DUO (clusters 4,7,10)
+
+```{r}
+target_gene_47 <- rownames(mk1_47)[abs(mk1_47$avg_log2FC) > 0.25 & mk1_47$p_val_adj < 0.05]
+
+eff_obj4 <- scmageck_eff_estimate(rds_subset2, bc_frame, targetgenelist, negative_ctrl_gene,
+                                  perturb_target_gene = target_gene_47,
+                                  scale_factor = 6,
+                                  assay_for_cor = "RNA",
+                                  perturb_gene_exp_id_list = targetgenelist_geneid,
+                                  background_correction = T)
+```
+
+## Figure S10a - LV/DUO
+
+```{r}
+p <- FeaturePlot(eff_obj4$rds, features = grep("eff", colnames(eff_obj4$rds@meta.data), value = T)) + ggtitle("Pattern 1: CCD6 PS score from LV/DUO")
+print(p)
+```
+
+## DE in transition (cluster 2)
+
+```{r}
+target_gene_c2 <- rownames(mk1_2_DE)[abs(mk1_2_DE$avg_log2FC) > 0.25 & mk1_2_DE$p_val_adj < 0.05]
+
+eff_obj6 <- scmageck_eff_estimate(rds_subset2, bc_frame, targetgenelist, negative_ctrl_gene,
+                                  perturb_target_gene = target_gene_c2,
+                                  scale_factor = 6,
+                                  assay_for_cor = "RNA",
+                                  perturb_gene_exp_id_list = targetgenelist_geneid,
+                                  background_correction = T)
+```
+
+## Figure S10b - DE in transition
+
+```{r}
+p <- FeaturePlot(eff_obj6$rds, features = grep("eff", colnames(eff_obj6$rds@meta.data), value = T)) + ggtitle("Pattern 2: CCD6 PS score from DE in transition")
+print(p)
+```
+
+# Generating HHEX PS (Figure 5c)
+
+```{r}
+rds_subset3 <- rds_subset
+
+for(sx in grep("_eff", colnames(rds_subset3@meta.data), value = T)){
+  rds_subset3@meta.data[,sx]=NULL
+}
+```
+
+```{r}
+targetgenelist=c("44-HHEX", "45-HHEX" )
+targetgenelist_geneid=c("HHEX", "HHEX")
+negative_ctrl_gene="47-WT" 
+
+eff_obj7 <- scmageck_eff_estimate(rds_subset3, bc_frame, targetgenelist, negative_ctrl_gene,
+                                  target_gene_min = 50,
+                                  target_gene_max = 100,
+                                  scale_factor = 6,
+                                  assay_for_cor = "RNA",
+                                  perturb_gene_exp_id_list = targetgenelist_geneid,
+                                  background_correction = T)
+```
+
+```{r}
+eff_estimat3 <- eff_obj7$eff_matrix
+rds_subset3_rerun <- eff_obj7$rds
+```
+
+```{r}
+for(pb_i in 1:length(targetgenelist)){
+  pb <- targetgenelist[pb_i]
+  p <- FeaturePlot(rds_subset3_rerun, features = paste(pb, "eff", sep = "_"))
+  print(p)
+  
+  pb_gene <- targetgenelist_geneid[pb_i]
+  p <- FeaturePlot(rds_subset3_rerun, features = pb_gene)
+  print(p)
+}
+```
+
+```{r}
+if(F){
+mkhhex_1 <- FindMarkers(rds_subset3_rerun, group.by = "gene", ident.1 = "45-HHEX", ident.2 = "47-WT", subset.ident = c("0","1","5","13"), logfc.threshold = 0.1) # DE
+mkhhex_2 <- FindMarkers(rds_subset3_rerun, group.by = "gene", ident.1 = "45-HHEX", ident.2 = "47-WT", subset.ident = c("4","7","10"), logfc.threshold = 0.1) # LV/DUO
+mkhhex_3 <- FindMarkers(rds_subset3_rerun, group.by = "gene", ident.1 = "45-HHEX", ident.2 = "47-WT", subset.ident = c("6"), logfc.threshold = 0.1) # PP
+mkhhex_36812 <- FindMarkers(rds_subset3_rerun, group.by = "gene", ident.1 = "45-HHEX", ident.2 = "47-WT", subset.ident = c("3","6","8","12"), logfc.threshold = 0.1) # PP/PP in transition
+mkhhex_3_all <- FindMarkers(rds_subset3, group.by = "gene", ident.1 = c("43-HHEX", "44-HHEX", "45-HHEX"), ident.2 = "47-WT", subset.ident = c("6"), logfc.threshold = 0.1) # PP
+mkhhex_36812_all <- FindMarkers(rds_subset3, group.by = "gene", ident.1 = c("43-HHEX", "44-HHEX", "45-HHEX"), ident.2 = "47-WT", subset.ident = c("3","6","8","12"), logfc.threshold = 0.1) # PP/PP in transition
+
+write.csv(mkhhex_1, file = "table/45hhex_vs_wt_c01513.csv",quote=F)
+write.csv(mkhhex_2, file = "table/45hhex_vs_wt_c4710.csv",quote=F)
+write.csv(mkhhex_3, file = "table/45hhex_vs_wt_c6.csv",quote=F)
+write.csv(mkhhex_3_all, file = "table/allhhex_vs_wt_c6.csv",quote=F)
+write.csv(mkhhex_36812, file = "table/45hhex_vs_wt_c36812.csv",quote=F)
+write.csv(mkhhex_36812_all, file = "table/allhhex_vs_wt_c36812.csv",quote=F)
+
+}else{
+  mkhhex_1 <- read.csv("table/45hhex_vs_wt_c01513.csv")
+  mkhhex_2 <- read.csv("table/45hhex_vs_wt_c4710.csv")
+  mkhhex_3 <- read.csv("table/45hhex_vs_wt_c6.csv")
+  mkhhex_3_all <- read.csv("table/allhhex_vs_wt_c6.csv")
+  mkhhex_36812 <- read.csv("table/45hhex_vs_wt_c36812.csv")
+  mkhhex_36812_all <- read.csv("table/allhhex_vs_wt_c36812.csv")
+}
+```
+
+```{r}
+hhex_cluster01513_target_gene <- mkhhex_1[mkhhex_1$p_val_adj < 0.05 & abs(mkhhex_1$avg_log2FC) > 0.5, 1]
+hhex_cluster4710_target_gene <- mkhhex_2[mkhhex_2$p_val_adj < 0.25, 1] # very few diff exp genes 
+hhex_cluster6_target_gene <- mkhhex_3_all[mkhhex_3_all$p_val_adj < 0.05, 1]
+hhex_cluster6_target_gene <- mkhhex_3[mkhhex_3$p_val_adj < 0.05 & abs(mkhhex_3$avg_log2FC) > 0.75, 1]
+hhex_cluster36812_target_gene <- mkhhex_36812[mkhhex_36812$p_val_adj<0.05 & abs(mkhhex_36812$avg_log2FC) > 0.7, 1]
+```
+
+```{r}
+rds_subset4 <- rds_subset
+
+for(sx in grep("_eff",colnames(rds_subset4@meta.data), value = T)){
+  rds_subset4@meta.data[,sx] = NULL
+}
+```
+
+## DE (clusters 0,1,5,13)
+
+```{r}
+targetgenelist <- c("43-HHEX", "44-HHEX", "45-HHEX")
+targetgenelist_geneid <- c("HHEX", "HHEX", "HHEX")
+negative_ctrl_gene<- "47-WT" 
+
+eff_obj8 <- scmageck_eff_estimate(rds_subset4, bc_frame, targetgenelist, negative_ctrl_gene,
+                                  perturb_target_gene = hhex_cluster01513_target_gene,
+                                  scale_factor = 6,
+                                  assay_for_cor = "RNA",
+                                  perturb_gene_exp_id_list = targetgenelist_geneid,
+                                  lambda = 0.0,
+                                  background_correction = T)
+```
+
+```{r}
+eff_estimat4 = eff_obj8$eff_matrix
+rds_subset4_rerun = eff_obj8$rds
+
+for(pb_i in 1:length(targetgenelist)){
+  pb <- targetgenelist[pb_i]
+  p <- FeaturePlot(rds_subset4_rerun, features = paste(pb, "eff", sep="_"))
+  print(p)
+  
+  pb_gene <- targetgenelist_geneid[pb_i]
+  p <- FeaturePlot(rds_subset4_rerun, features = pb_gene)
+  print(p)
+}
+```
+
+## PP/PP in transition (clusters 3,6,8,12)
+
+```{r}
+eff_obj9 <- scmageck_eff_estimate(rds_subset4, bc_frame, targetgenelist, negative_ctrl_gene,
+                                  perturb_target_gene = hhex_cluster36812_target_gene,
+                                  scale_factor = 6,
+                                  assay_for_cor = "RNA",
+                                  perturb_gene_exp_id_list = targetgenelist_geneid,
+                                  lambda = 0.0,
+                                  background_correction = T)
+```
+
+```{r}
+eff_estimat5 = eff_obj9$eff_matrix
+rds_subset4_rerun = eff_obj9$rds
+
+for(pb_i in 1:length(targetgenelist)){
+  pb <- targetgenelist[pb_i]
+  p <- FeaturePlot(rds_subset4_rerun, features = paste(pb, "eff", sep="_"))
+  print(p)
+  
+  pb_gene <- targetgenelist_geneid[pb_i]
+  p <- FeaturePlot(rds_subset4_rerun, features = pb_gene)
+  print(p)
+}
+```
+
+## LV/DUO (clusters 4,7,10)
+
+```{r}
+eff_obj10 <- scmageck_eff_estimate(rds_subset4, bc_frame, targetgenelist, negative_ctrl_gene,
+                                   perturb_target_gene = hhex_cluster4710_target_gene,
+                                   scale_factor = 6,
+                                   assay_for_cor = "RNA",
+                                   perturb_gene_exp_id_list = targetgenelist_geneid,
+                                   lambda = 0.0,
+                                   background_correction = T)
+```
+
+```{r}
+eff_estimat6 = eff_obj10$eff_matrix
+rds_subset4_rerun = eff_obj10$rds
+
+for(pb_i in 1:length(targetgenelist)){
+  pb <- targetgenelist[pb_i]
+  p <- FeaturePlot(rds_subset4_rerun, features = paste(pb, "eff", sep="_"))
+  print(p)
+  
+  pb_gene <- targetgenelist_geneid[pb_i]
+  p <- FeaturePlot(rds_subset4_rerun, features = pb_gene)
+  print(p)
+}
+```
+
+```{r}
+rds_subset5 <- rds_subset
+for(sx in grep("_eff", colnames(rds_subset5@meta.data), value = T)){
+  rds_subset5@meta.data[,sx]=NULL
+}
+
+z <- rds_subset5$gene
+z[z=="43-HHEX"] <- "HHEX"
+z[z=="44-HHEX"] <- "HHEX"
+z[z=="45-HHEX"] <- "HHEX"
+
+rds_subset5 <- AddMetaData(rds_subset5, z, col.name = "gene")
+
+bc_frame2 <- bc_frame
+z <- bc_frame2$gene
+z[z=="43-HHEX"] <- "HHEX"
+z[z=="44-HHEX"] <- "HHEX"
+z[z=="45-HHEX"] <- "HHEX"
+bc_frame2$gene  <-  z
+```
+
+```{r}
+targetgenelist <- c("HHEX")
+targetgenelist_geneid <- c("HHEX")
+negative_ctrl_gene <- "47-WT" 
+
+eff_obj11 <- scmageck_eff_estimate(rds_subset5, bc_frame2, targetgenelist, negative_ctrl_gene,
+                                   perturb_target_gene = hhex_cluster36812_target_gene,
+                                   scale_factor = 6,
+                                   assay_for_cor = "RNA",
+                                   perturb_gene_exp_id_list = targetgenelist_geneid,
+                                   background_correction = T,
+                                   lambda = 0)
+```
+
+```{r}
+eff_estimat7=eff_obj11$eff_matrix
+rds_subset5_rerun=eff_obj11$rds
+```
+
+## Figure 5c - HHEX PS score
+
+```{r}
+p <- FeaturePlot(subset(rds_subset5_rerun, gene == "HHEX"), features = "HHEX_eff") + ggtitle("HHEX PS score")
+print(p)
+```
+
+# Generating FOXA1 PS (Figures S9a,b,c)
+
+```{r}
+rds_subset6 <- rds_subset
+
+for(sx in grep("_eff",colnames(rds_subset6@meta.data), value = T)){
+  rds_subset6@meta.data[,sx]=NULL
+}
+```
+
+```{r}
+targetgenelist <- c("51-FOXA1", "53-FOXA1/2" )
+targetgenelist_geneid <- c("FOXA1", "FOXA1")
+negative_ctrl_gene <- "47-WT" 
+
+eff_obj12 <- scmageck_eff_estimate(rds_subset6, bc_frame, targetgenelist, negative_ctrl_gene,
+                                   scale_factor = 6,
+                                   assay_for_cor = "RNA",
+                                   perturb_gene_exp_id_list = targetgenelist_geneid,
+                                   background_correction = T)
+```
+
+```{r}
+eff_estimat8 <- eff_obj12$eff_matrix
+rds_subset6_rerun <- eff_obj12$rds
+```
+
+## Figure S9a - FOXA1 PS score (clone 51)
+
+```{r}
+p <- FeaturePlot(eff_obj12$rds, features = "51-FOXA1_eff") + ggtitle("FOXA1 PS score (clone 51)")
+print(p)
+```
+
+## Figure S9b - FOXA1 PS score (clone 53)
+
+```{r}
+p <- FeaturePlot(eff_obj12$rds, features = "53-FOXA1/2_eff") + ggtitle("FOXA1 PS score (clone 53)")
+print(p)
+```
+
+## Figure S9c - FOXA1 expression (all clones)
+
+```{r}
+p <- FeaturePlot(rds_subset6_rerun, features = "FOXA1") + ggtitle("FOXA1 expression (all clones)")
+print(p)
+```
+
+```{r}
+session_info()
+```
+
