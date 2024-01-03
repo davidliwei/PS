@@ -1,0 +1,326 @@
+---
+title: "HIV Perturb-seq"
+author: 
+- name: "Bicna Song"
+- affiliation: "Children's National Hospital"
+- name: "Wei Li"
+- affiliation: "Children's National Hospital"
+date: "2024-01-02"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Setup the Seurat Object
+
+```{r}
+library(Seurat)
+library(scMAGeCK)
+library(ggplot2)
+library(hdf5r)
+```
+
+```{r}
+feat_c = readRDS(file = "JKLAT_H13Ld2EGFP.combined.rds")
+```
+
+```{r}
+BARCODE='BARCODE_H13Ld2EGFP.txt'
+```
+
+```{r}
+featurePlot(RDS = feat_c, BARCODE=BARCODE, TYPE = "Dis")
+```
+
+```{r}
+feat_c=pre_processRDS(BARCODE = BARCODE, RDS = feat_c)
+```
+
+```{r}
+feat_c_singlet = subset(x = feat_c, subset = nFeature_sgRNA_guides == 1)
+```
+
+# Visualizing QC metrics as a violin plot (Figure S6a)
+```{r}
+feat_c_singlet <- SetIdent(feat_c_singlet, value = "orig.ident")
+VlnPlot(feat_c_singlet, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+```
+
+
+```{r}
+feat_c_singlet <- subset(feat_c_singlet, subset = nFeature_RNA > 200 & nFeature_RNA < 7500 & percent.mt < 15)
+```
+
+
+```{r}
+#We can visualize QC metrics again after filtering cells
+VlnPlot(feat_c_singlet, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+```
+
+```{r}
+feat_c_singlet <- SetIdent(feat_c_singlet, value = feat_c_singlet@project.name)
+```
+
+```{r}
+meta_feat_c_singlet <- feat_c_singlet@meta.data
+#write.csv(meta_feat_c_singlet, file = "meta_singlet_filtered.csv")
+```
+
+# Standard pre-processing workflow
+
+```{r}
+# Normalizing the data
+feat_c_singlet <- NormalizeData(feat_c_singlet, normalization.method = "LogNormalize", scale.factor = 10000)
+feat_c_singlet <- FindVariableFeatures(feat_c_singlet, selection.method = "vst", nfeatures = 2000)
+
+# Identify the 10 most highly variable genes
+top10 <- head(VariableFeatures(feat_c_singlet), 10)
+
+# plot variable features with and without labels
+pdf(file = "VariableFeaturePlot.pdf")
+plot1 <- VariableFeaturePlot(feat_c_singlet)
+plot2 <- LabelPoints(plot = plot1, points = top10, repel = TRUE)
+plot1
+plot2
+dev.off()
+
+# Scaling the data
+#all.genes <- rownames(feat_c_singlet)
+#feat_c_singlet <- ScaleData(feat_c_singlet, features = all.genes)
+feat_c_singlet <- ScaleData(feat_c_singlet)
+
+# Perform linear dimensional reduction
+feat_c_singlet <- RunPCA(feat_c_singlet, features = VariableFeatures(object = feat_c_singlet))
+print(feat_c_singlet[["pca"]], dims = 1:5, nfeatures = 5)
+
+pdf(file = "VizDimLoadings.pdf")
+VizDimLoadings(feat_c_singlet, dims = 1:2, reduction = "pca")
+dev.off()
+
+pdf(file = "DimPlot_PCA.pdf")
+DimPlot(feat_c_singlet, reduction = "pca")
+dev.off()
+
+pdf(file = "DimHeatmap_PCA.pdf")
+DimHeatmap(feat_c_singlet, dims = 1, cells = 500, balanced = TRUE)
+dev.off()
+
+# Determine the ‘dimensionality’ of the dataset
+feat_c_singlet <- JackStraw(feat_c_singlet, num.replicate = 100)
+feat_c_singlet <- ScoreJackStraw(feat_c_singlet, dims = 1:20)
+
+pdf(file = "JackStrawPlot.pdf")
+JackStrawPlot(feat_c_singlet, dims = 1:15)
+dev.off()
+
+pdf(file = "ElbowPlot.pdf")
+ElbowPlot(feat_c_singlet)
+dev.off()
+
+# Cluster the cells, and Run non-linear dimensional reduction (UMAP/tSNE)
+feat_c_singlet <- FindNeighbors(feat_c_singlet, dims = 1:10)
+feat_c_singlet <- FindClusters(feat_c_singlet, resolution = 0.5)
+head(Idents(feat_c_singlet), 5)
+
+feat_c_singlet <- RunUMAP(feat_c_singlet, dims = 1:10)
+pdf(file = "umap.pdf")
+#par(mfrow = c(1,2))
+DimPlot(feat_c_singlet, reduction = "umap")
+DimPlot(feat_c_singlet, reduction = "umap", group.by = "orig.ident")
+dev.off()
+```
+
+# Generating the UMAP plot (Figure 4b)
+
+```{r}
+DimPlot(feat_c_singlet, reduction = "umap", group.by = "orig.ident")
+```
+
+# Clustering results (Figure S6b)
+
+```{r}
+DimPlot(feat_c_singlet, reduction = "umap")
+```
+
+
+```{r}
+DefaultAssay(feat_c_singlet) <- "sgRNA"
+```
+
+```{r}
+perturbed_gene_list <- feat_c_singlet@assays[["sgRNA"]]@counts@Dimnames[[1]]
+perturbed_gene_list <- perturbed_gene_list[-4]
+perturbed_gene_list
+```
+
+```{r}
+for (i in perturbed_gene_list) {
+  print(i)
+  FeaturePlot(feat_c_singlet, features = i)
+  ggsave(paste0(i,"_sgrnaplot.jpg"), plot = last_plot(), device = "jpg", width = 7, height = 5)
+}
+```
+
+```{r}
+DefaultAssay(feat_c_singlet)<-"RNA"
+
+for (i in perturbed_gene_list) {
+  print(i)
+  
+  FeaturePlot(feat_c_singlet, features = i)
+  
+  ggsave(paste0(i,"_featureplot.jpg"), plot = last_plot(), device = "jpg", width = 7, height = 5)
+}
+```
+
+# Visualizing the distribution of BRD4-targeting gRNAs (Figure S6d)
+
+```{r}
+FeaturePlot(feat_c_singlet, features = "BRD4")
+```
+
+```{r}
+table(feat_c_singlet@meta.data$gene)
+```
+
+```{r}
+#barcode = "BARCODE_H13Ld2EGFP.txt"
+bc_frame = read.table(BARCODE, header = T)
+```
+
+```{r}
+non_target_ctrl = "Non-Targeting"
+```
+
+```{r}
+eff_obj <- scmageck_eff_estimate(feat_c_singlet, bc_frame, perturb_gene = perturbed_gene_list, non_target_ctrl, scale_factor = 3)
+```
+
+```{r}
+eff_estimat=eff_obj$eff_matrix
+rds_subset=eff_obj$rds
+```
+
+```{r}
+DefaultAssay(rds_subset) <- "RNA"
+DimPlot(rds_subset, group.by = "orig.ident")
+```
+
+```{r}
+DimPlot(rds_subset, group.by = "gene")
+```
+
+# Visualizing the expression of HIV-GFP (Figure 4d)
+
+```{r}
+FeaturePlot(rds_subset, features = "H13Ld2EGFP", order = TRUE)
+```
+
+```{r}
+for(pb in perturbed_gene_list){
+  p=FeaturePlot(rds_subset, features = paste(pb,'eff',sep='_'))
+  print(p)
+  p=FeaturePlot(rds_subset, features = pb)
+  print(p)
+}
+```
+
+# Visualizing the distribution of BRD4 PS score (Figure 4c)
+
+```{r}
+pb = "BRD4"
+FeaturePlot(rds_subset, features = paste(pb,'eff',sep='_'), order = TRUE) + ggtitle("BRD4 PS score")
+```
+
+# Visualizing the distribution of CCNT1 PS score (Figure 4f)
+
+```{r}
+pb = "CCNT1"
+FeaturePlot(rds_subset, features = paste(pb,'eff',sep='_'), order = TRUE) + ggtitle("CCNT1 PS score")
+```
+
+# Finding all markers of cluster 8
+
+```{r}
+cluster8.markers <- FindMarkers(feat_c_singlet, ident.1 = 8, min.pct = 0.25)
+```
+
+```{r}
+head(cluster8.markers, n = 10)
+```
+
+```{r}
+write.table(cluster8.markers,file='cluster8_markers.txt',sep='\t',quote=F,row.names = T)
+```
+
+```{r}
+cluster8.markers.2 <- FindMarkers(feat_c_singlet, ident.1 = 8)
+head(cluster8.markers.2, n = 10)
+write.table(cluster8.markers.2,file='cluster8_markers.v2.txt',sep='\t',quote=F,row.names = T)
+```
+
+
+# Generating the expression distribution of BRD4 signature genes in cluster 8 vs other clusters (Figure S6e)
+
+```{r}
+#Only cells express BRD4-targeting gRNAs are included. 
+rds_brd4 <- subset(feat_c_singlet, cells = rownames(feat_c_singlet@meta.data)[feat_c_singlet@meta.data$gene=='BRD4'])
+DimPlot(rds_brd4)
+brd4_target <- read.table('BRD4_targets.txt',header = T)
+brd4_target <- brd4_target[,1]
+z <- GetAssayData(rds_brd4)
+z <- z[rownames(z)%in%brd4_target,]
+zmean <- colMeans(z)
+rds_brd4 <- AddMetaData(rds_brd4, zmean, col.name='BRD4_targets')
+z <- rds_brd4@meta.data
+z$cluster <- ifelse(z$seurat_clusters==8,'Cluster 8','Others')
+wxs <- wilcox.test(z$BRD4_targets[z$seurat_clusters==8], z$BRD4_targets[z$seurat_clusters!=8])
+ggplot(z,aes(x=cluster,y=BRD4_targets,fill=cluster)) + 
+  geom_violin() +
+  geom_jitter(shape=16, position=position_jitter(0.2))+
+  theme_classic()+
+  ggtitle('BRD4 targets',subtitle = paste('p=',wxs$p.value))
+```
+
+# Differential expression results between BRD4 PS+ cells vs BRD4 PS- cells (Figure S6f)
+
+```{r}
+gene_e <- GetAssayData(feat_c_singlet, assay = 'sgRNA')
+pfr <- ifelse(gene_e['BRD4',]>0,1,0)
+feat_c_singlet <- AddMetaData(feat_c_singlet, pfr, col.name ='BRD4_guides')
+```
+
+```{r}
+rds_cluster8 <- subset(feat_c_singlet, idents = '8')
+```
+
+```{r}
+de_brd4 = FindMarkers(rds_cluster8, ident.1=1, ident.2=0, group.by='BRD4_guides')
+#write.csv(de_brd4,file='cluster8_brd4_vs_others.csv',quote = F)
+```
+
+```{r}
+pfr2 <- ifelse(pfr==1 & feat_c_singlet$seurat_clusters=='8', 1, 0)
+feat_c_singlet <- AddMetaData(feat_c_singlet, pfr2, col.name ='cluster8_BRD4_guides' )
+de_brd4_2 <- FindMarkers(feat_c_singlet, ident.1 = 1, ident.2 = 0, group.by = 'cluster8_BRD4_guides')
+#write.csv(de_brd4_2,file='cluster8_brd4_vs_all_other_cells.csv',quote = F)
+```
+
+```{r}
+de_brd4_2$colors <- ifelse(rownames(de_brd4_2) == "H13Ld2EGFP", "red", "black")
+```
+
+```{r}
+plot(de_brd4_2$avg_log2FC,-log10(de_brd4_2$p_val_adj),pch=20,xlab = 'log2 Fold Change',ylab='-log10 (adj p value)', col=de_brd4_2$colors) + title(main = "Cells with strong BRD4 perturbation vs. other cells")
+text(2.2, 11, labels = "GFP", col = "red")
+```
+
+
+# Session Info
+
+```{r}
+session_info()
+```
+
