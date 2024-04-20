@@ -18,7 +18,7 @@ In particular, PS can be used to analyze heterogeneity of perturbation responses
 
 ## Installation
 
-PS has been implemented in R as part of our [scMAGeCK](https://bitbucket.org/weililab/scmageck/src/master/) package. To use, simply install scMAGeCK in one of the following ways.
+PS has been implemented in R as part of our [scMAGeCK](https://bitbucket.org/weililab/scmageck/src/master/) package. To use, simply install scMAGeCK in one of the following ways. Check our [Github](https://github.com/weililab/scMAGeCK) repo for the R source code.
 
 ## Dependencies 
 
